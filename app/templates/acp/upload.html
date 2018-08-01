@@ -1,0 +1,11 @@
+<form name="upload_form" action="/acp/upload" enctype="multipart/form-data" method="post">
+    <input type="file" accept="image/*" name="images" multiple>
+    <input type="submit" name="submit">
+</form>
+<ul>
+    {% for url in image_urls %}
+        <li>
+            <a href="{{ url }}">{{ url }}</a>
+        </li>
+    {% endfor %}
+</ul>
