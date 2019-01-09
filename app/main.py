@@ -1,6 +1,7 @@
 import os
 import hashlib
-from flask import Flask, render_template, url_for, request
+import re
+from flask import Flask, render_template, url_for, request, abort, send_from_directory
 from werkzeug.utils import secure_filename
 
 UPLOAD_FOLDER = './images'
@@ -39,21 +40,35 @@ def getPathSegment(filename):
 def main():
     return 'Image Storage'
 
-@app.route('/upload', methods=['POST'])
+@app.route('/images/<path:path>', methods=['GET'])
+def getImage(path):
+    path = path.split('/')
+    if len(path) != 2:
+        abort(404)
+    if not re.fullmatch('[0-9a-f]{3}', path[0]):
+        abort(404)
+    directory = os.path.join(app.config['UPLOAD_FOLDER'], path[0])
+    return send_from_directory(directory, path[1])
+
+@app.route('/upload', methods=['GET', 'POST'])
 def upload():
-    if 'image' not in request.files:
-        return redirect(url_for('test'))
-    image = request.files['image']
-    if image.filename == '':
-        return redirect(url_for('test'))
-    if image and allowed_file(image.filename):
-        filename = prepare_name(image.filename)
-        path_segment = getPathSegment(filename)
-        full_path = os.path.join(app.config['UPLOAD_FOLDER'], path_segment)
-        if not os.path.exists(full_path):
-            os.makedirs(full_path)
-        image.save(os.path.join(full_path, filename))
-        return 'DONE'
+    if request.method == 'GET':
+        return render_template('upload.html')
+    elif request.method == 'POST':
+        if 'image' not in request.files:
+            return redirect(url_for('test'))
+        image = request.files['image']
+        if image.filename == '':
+            return redirect(url_for('test'))
+        if image and allowed_file(image.filename):
+            filename = prepare_name(image.filename)
+            path_segment = getPathSegment(filename)
+            full_path = os.path.join(app.config['UPLOAD_FOLDER'], path_segment)
+            if not os.path.exists(full_path):
+                os.makedirs(full_path)
+            image_path = os.path.join(full_path, filename)
+            image.save(image_path)
+            return render_template('upload.html', image_path=image_path)
 
 @app.route('/test', methods=['GET'])
 def test():

@@ -9,5 +9,8 @@
     <input type="file" name="image" autofocus required>
     <input type="submit">
 </form>
+{% if image_path: %}
+    {{ image_path }}
+{% endif %}
 </body>
 </html>
