@@ -1,8 +1,9 @@
 import os
+import hashlib
 from flask import Flask, render_template, url_for, request
 from werkzeug.utils import secure_filename
 
-UPLOAD_FOLDER = './test'
+UPLOAD_FOLDER = './images'
 ALLOWED_EXTENSIONS = ('png', 'jpg', 'jpeg')
 TRANSLITERATION_DICTIONARY = {
     'а':'a','б':'b','в':'v','г':'g','ґ':'g','д':'d',
@@ -29,6 +30,11 @@ def prepare_name(name):
             temp_name.append(char)
     return secure_filename(''.join(temp_name))
 
+def getPathSegment(filename):
+    m = hashlib.md5()
+    m.update(filename.encode('utf-8'))
+    return m.hexdigest()[:3]
+
 @app.route('/')
 def main():
     return 'Image Storage'
@@ -42,7 +48,11 @@ def upload():
         return redirect(url_for('test'))
     if image and allowed_file(image.filename):
         filename = prepare_name(image.filename)
-        image.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+        path_segment = getPathSegment(filename)
+        full_path = os.path.join(app.config['UPLOAD_FOLDER'], path_segment)
+        if not os.path.exists(full_path):
+            os.makedirs(full_path)
+        image.save(os.path.join(full_path, filename))
         return 'DONE'
 
 @app.route('/test', methods=['GET'])

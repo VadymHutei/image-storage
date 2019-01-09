@@ -1,5 +1,5 @@
 # storage dir
-app/storage/
+app/images/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
