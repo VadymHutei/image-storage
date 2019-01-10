@@ -1,74 +1,74 @@
 import os
-import hashlib
-import re
 from flask import Flask, render_template, url_for, request, abort, send_from_directory
-from werkzeug.utils import secure_filename
+from PIL import Image
+from helper import allowed_file, prepare_name, getPathSegment, isSegment, isResizedImage, getRequestedParameters
 
 UPLOAD_FOLDER = './images'
-ALLOWED_EXTENSIONS = ('png', 'jpg', 'jpeg')
-TRANSLITERATION_DICTIONARY = {
-    'а':'a','б':'b','в':'v','г':'g','ґ':'g','д':'d',
-    'е':'e','є':'e','э':'e','ë':'yo','ж':'zh','з':'z',
-    'и':'i','ы':'y','і':'i','ї':'i','й':'i','к':'k',
-    'л':'l','м':'m','н':'n','о':'o','п':'p','р':'r',
-    'с':'s','т':'t','у':'u','ф':'f','х':'h','ц':'ts',
-    'ч':'ch','ш':'sh','щ':'shch','ь':'','ю':'iu','я':'ia'
-}
+
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-def prepare_name(name):
-    temp_name = []
-    trans_dict = TRANSLITERATION_DICTIONARY.keys()
-    for char in name.lower():
-        if char in trans_dict:
-            temp_name.append(TRANSLITERATION_DICTIONARY[char])
-        else:
-            temp_name.append(char)
-    return secure_filename(''.join(temp_name))
-
-def getPathSegment(filename):
-    m = hashlib.md5()
-    m.update(filename.encode('utf-8'))
-    return m.hexdigest()[:3]
-
 @app.route('/')
 def main():
-    return 'Image Storage'
+    return 'Ukubuka Image Storage'
 
 @app.route('/images/<path:path>', methods=['GET'])
 def getImage(path):
-    path = path.split('/')
-    if len(path) != 2:
-        abort(404)
-    if not re.fullmatch('[0-9a-f]{3}', path[0]):
-        abort(404)
-    directory = os.path.join(app.config['UPLOAD_FOLDER'], path[0])
-    return send_from_directory(directory, path[1])
+    l_path = path.split('/')
+    if len(l_path) != 2: abort(404)
+    if not isSegment(l_path[0]): abort(404)
+    segment = l_path[0]
+    image_name = l_path[1]
+    if not allowed_file(image_name): abort(400)
+    directory = os.path.join(app.config['UPLOAD_FOLDER'], segment)
+    image_path = os.path.join(directory, image_name)
+    # Если есть файл, отдаем
+    if os.path.exists(image_path):
+        return send_from_directory(directory, image_name)
+    else:
+        # Если файла нет, проверяем, запрашивается ли ресайз
+        if isResizedImage(image_name):
+            params = getRequestedParameters(image_name)
+            if not params: abort(500)
+            image_path = os.path.join(directory, params['name'])
+            if not os.path.exists(image_path):abort(404)
+            img = Image.open(image_path)
+            size = []
+            size.append(round(params['height'] * img.size[0] / img.size[1]) if params['width'] is None else params['width'])
+            size.append(round(params['width'] * img.size[1] / img.size[0]) if params['height'] is None else params['height'])
+            size = tuple(size)
+            if size == img.size: return send_from_directory(directory, params['name'])
+            # img.resize(size)
+            return 'resize'
+        else:
+            abort(404)
 
+# Загрузка картинки на сервер
 @app.route('/upload', methods=['GET', 'POST'])
 def upload():
     if request.method == 'GET':
         return render_template('upload.html')
     elif request.method == 'POST':
         if 'image' not in request.files:
-            return redirect(url_for('test'))
+            return render_template('upload.html', message='err1')
         image = request.files['image']
         if image.filename == '':
-            return redirect(url_for('test'))
-        if image and allowed_file(image.filename):
-            filename = prepare_name(image.filename)
-            path_segment = getPathSegment(filename)
-            full_path = os.path.join(app.config['UPLOAD_FOLDER'], path_segment)
-            if not os.path.exists(full_path):
-                os.makedirs(full_path)
-            image_path = os.path.join(full_path, filename)
-            image.save(image_path)
-            return render_template('upload.html', image_path=image_path)
+            return render_template('upload.html', message='err2')
+        if not image or not allowed_file(image.filename):
+            return render_template('upload.html', message='err3')
+        # Подготовка безопасного имени для картинки
+        filename = prepare_name(image.filename)
+        # Определение сегмента для размещения картинки
+        path_segment = getPathSegment(filename)
+        # Построение полного пути
+        full_path = os.path.join(app.config['UPLOAD_FOLDER'], path_segment)
+        if not os.path.exists(full_path):
+            os.makedirs(full_path)
+        image_path = os.path.join(full_path, filename)
+        # Сохранение
+        image.save(image_path)
+        return render_template('upload.html', message=image_path)
 
 @app.route('/test', methods=['GET'])
 def test():
